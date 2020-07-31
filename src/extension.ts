@@ -50,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
     ) => {
       let lineCount = document.lineCount;
       return [new vscode.Range(0, 0, lineCount - 1, 0)];
-    }
+    },
   };
 
   const gitExtension = vscode.extensions.getExtension("vscode.git")?.exports;
@@ -68,18 +68,18 @@ export function activate(context: vscode.ExtensionContext) {
     "extension.syncGitLabMergeRequest",
     async () => {
       // The code you place here will be executed every time your command is executed
-      // Ask user to paste GitLab API access token
-      const gitlabAPIAccessToken = await vscode.window.showInputBox({
-        placeHolder: "GitLab Access Token"
-      });
 
-      const gitlabDomain = await vscode.window.showInputBox({
-        placeHolder: "Your GitLab domain (eg: gitlab.example.com)"
-      });
+      const gitlabAPIAccessToken = vscode.workspace
+        .getConfiguration("gitlab-mr-sync")
+        .get("gitlabAccessToken");
 
-      const projectId = await vscode.window.showInputBox({
-        placeHolder: "Project ID"
-      });
+      const gitlabDomain = vscode.workspace
+        .getConfiguration("gitlab-mr-sync")
+        .get("gitlabDomain");
+
+      const projectId = vscode.workspace
+        .getConfiguration("gitlab-mr-sync")
+        .get("gitlabProjectId");
 
       const currentBranchName = (await repository.getBranch("HEAD")).name;
 
@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
       const mergeRequestIid = mergeRequests[0]?.iid;
 
       const { data }: { data: any[] } = await axios.get(
-        `https://${gitlabDomain}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}/discussions?private_token=${gitlabAPIAccessToken}`
+        `https://${gitlabDomain}/api/v4/projects/${projectId}/merge_requests/${mergeRequestIid}/discussions?private_token=${gitlabAPIAccessToken}&per_page=100`
       );
 
       const discussions = data.filter(({ notes }) =>
@@ -98,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
       );
 
       try {
-        const threads = discussions?.map(discussion => {
+        const threads = discussions?.map((discussion) => {
           const line = discussion.notes[0].position.new_line;
           return new CommentThread(
             discussion.id,
@@ -117,8 +117,10 @@ export function activate(context: vscode.ExtensionContext) {
           );
         });
 
-        const comments = discussions?.map(discussion => {
-          const thread = threads?.find(_thread => _thread.id === discussion.id);
+        const comments = discussions?.map((discussion) => {
+          const thread = threads?.find(
+            (_thread) => _thread.id === discussion.id
+          );
 
           return {
             threadId: discussion.id,
@@ -129,17 +131,17 @@ export function activate(context: vscode.ExtensionContext) {
                   note.body,
                   vscode.CommentMode.Preview,
                   {
-                    name: note.author.name
+                    name: note.author.name,
                   },
                   thread,
                   undefined
                 )
-            )
+            ),
           };
         });
 
         comments?.forEach(({ threadId, comments }) => {
-          const thread = threads?.find(_thread => _thread.id === threadId);
+          const thread = threads?.find((_thread) => _thread.id === threadId);
           if (thread)
             commentController.createCommentThread(
               thread.uri,
